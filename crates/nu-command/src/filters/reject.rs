@@ -25,6 +25,7 @@ impl Command for Reject {
             .rest(
                 "rest",
                 SyntaxShape::OneOf(vec![
+                    SyntaxShape::Range,
                     SyntaxShape::CellPath,
                     SyntaxShape::List(Box::new(SyntaxShape::CellPath)),
                 ]),
@@ -114,6 +115,35 @@ impl Command for Reject {
                         }],
                     };
                     new_columns.push(cv.clone());
+                }
+                Value::Range { val, .. } => {
+                    let valiter = val.into_range_iter(engine_state.ctrlc.clone())?;
+
+                    for value in valiter {
+                        match value {
+                            Value::Int { val, .. } => {
+                                let cv = CellPath {
+                                    members: vec![PathMember::Int {
+                                        val: val as usize,
+                                        span: *col_span,
+                                        optional: false,
+                                    }],
+                                };
+                                new_columns.push(cv.clone());
+                            }
+                            x => {
+                                let span = x.span();
+                                let msg = format!(
+                                    "The value expected was Int, but got: {}",
+                                    x.get_type()
+                                );
+                                return Err(ShellError::TypeMismatch {
+                                    err_message: msg,
+                                    span,
+                                });
+                            }
+                        }
+                    }
                 }
                 x => {
                     return Err(ShellError::CantConvert {
